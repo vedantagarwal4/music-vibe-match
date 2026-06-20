@@ -109,8 +109,11 @@ def get_firestore_tags(
 
 
 BROWSER_HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "Accept": "application/json",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.shazam.com/",
+    "Origin": "https://www.shazam.com",
 }
 
 
@@ -128,8 +131,7 @@ def get_track_details(track_key: str, debug: bool = False) -> dict:
             timeout=10,
         )
         if resp.status_code != 200:
-            if debug:
-                print(f"[Shazam] Track {track_key} returned {resp.status_code}")
+            print(f"[Shazam] Track {track_key} returned {resp.status_code} - enrichment failed")
             return _unknown_track(track_key)
 
         data = resp.json()
@@ -140,8 +142,7 @@ def get_track_details(track_key: str, debug: bool = False) -> dict:
             "shazam_key": track_key,
         }
     except Exception as e:
-        if debug:
-            print(f"[Shazam] Could not get details for track {track_key}: {e}")
+        print(f"[Shazam] Could not get details for track {track_key}: {e}")
         return _unknown_track(track_key)
 
 

@@ -24,8 +24,8 @@ on:
         default: "false"
         type: choice
         options:
-          - "true"
           - "false"
+          - "true"
       limit:
         description: "Max songs to process (leave blank for all)"
         required: false
