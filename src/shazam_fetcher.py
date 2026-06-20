@@ -109,25 +109,28 @@ def get_firestore_tags(
 
 def get_track_details(track_key: str, debug: bool = False) -> dict:
     """
-    Fetch title, artist, and genre via ShazamIO (reverse-engineered mobile API).
-    Free, unlimited, no API key needed. Works from any IP including GitHub Actions.
+    Fetch title, artist, and genre via Shazam's discovery API.
+    Works on residential IPs (home Mac). No extra library needed.
     """
-    import asyncio
-    from shazamio import Shazam
-
-    async def _fetch():
-        shazam = Shazam()
-        return await asyncio.wait_for(shazam.track_about(track_id=track_key), timeout=8.0)
-
+    url = f"https://www.shazam.com/discovery/v5/en-US/US/web/-/track/{track_key}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.shazam.com/",
+    }
     try:
-        data = asyncio.run(_fetch())
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            if debug:
+                print(f"[Shazam] HTTP {resp.status_code} for track {track_key}")
+            return _unknown_track(track_key)
+        data = resp.json()
         title  = data.get("title", "").strip()
         artist = data.get("subtitle", "").strip()
         genre  = data.get("genres", {}).get("primary", "")
-
         if not title:
             return _unknown_track(track_key)
-
         return {
             "title":      title,
             "artist":     artist,
