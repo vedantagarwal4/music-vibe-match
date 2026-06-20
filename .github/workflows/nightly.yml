@@ -1,0 +1,109 @@
+# Shazam Taste Filter - Nightly Automation
+#
+# Runs every night at 11:30 PM IST (18:00 UTC).
+#
+# IST to UTC: IST = UTC + 5:30
+# Common alternatives:
+#   "0 16 * * *"   = 9:30 PM IST
+#   "30 17 * * *"  = 11:00 PM IST
+#   "0 18 * * *"   = 11:30 PM IST  <- default
+#   "30 18 * * *"  = 12:00 AM IST
+
+name: Nightly Shazam Filter
+
+on:
+  schedule:
+    - cron: "0 18 * * *"   # 11:30 PM IST daily
+
+  # Manual trigger from GitHub Actions tab
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (print results, don't send email)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      limit:
+        description: "Max songs to process (leave blank for all)"
+        required: false
+        default: ""
+
+jobs:
+  run-filter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Needed so the job can commit feedback.json back to the repo
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore state file
+        uses: actions/cache@v4
+        with:
+          path: state.json
+          key: shazam-state-${{ github.run_id }}
+          restore-keys: |
+            shazam-state-
+
+      - name: Run Shazam filter
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_REFRESH_TOKEN: ${{ secrets.FIREBASE_REFRESH_TOKEN }}
+          FIREBASE_USER_ID: ${{ secrets.FIREBASE_USER_ID }}
+          FIREBASE_PROJECT: ${{ secrets.FIREBASE_PROJECT }}
+          YTMUSIC_HEADERS: ${{ secrets.YTMUSIC_HEADERS }}
+          PLAYLIST_IDS: ${{ secrets.PLAYLIST_IDS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          SCORE_THRESHOLD: ${{ secrets.SCORE_THRESHOLD }}
+        run: |
+          cd src
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          LIMIT="${{ github.event.inputs.limit }}"
+
+          ARGS=""
+          if [ "$DRY_RUN" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ -n "$LIMIT" ]; then
+            ARGS="$ARGS --limit $LIMIT"
+          fi
+
+          python main.py $ARGS
+
+      - name: Save updated state file
+        uses: actions/cache@v4
+        with:
+          path: state.json
+          key: shazam-state-${{ github.run_id }}
+
+      - name: Commit feedback.json if updated
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet feedback.json 2>/dev/null; then
+            echo "No feedback changes to commit."
+          else
+            git add feedback.json
+            git commit -m "chore: update feedback.json [skip ci]"
+            git push
+          fi
