@@ -80,7 +80,6 @@ def load_config() -> dict:
         sys.exit(1)
 
     config["SCORE_THRESHOLD"] = int(os.getenv("SCORE_THRESHOLD", "5"))
-    config["RAPIDAPI_KEY"]    = os.getenv("RAPIDAPI_KEY", "")
     config["TO_EMAIL"]        = os.getenv("TO_EMAIL", config["GMAIL_ADDRESS"])
 
     return config
@@ -122,7 +121,6 @@ def run(dry_run: bool = False, debug: bool = False, limit: int = None) -> None:
         project=config["FIREBASE_PROJECT"],
         since_iso=last_run,
         limit=limit,
-        rapidapi_key=config["RAPIDAPI_KEY"],
         debug=debug,
     )
     print(f"      {len(new_songs)} new song(s) to process{f' (limit={limit})' if limit else ''}")
