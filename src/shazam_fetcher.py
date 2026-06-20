@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 
 FIREBASE_TOKEN_URL = "https://securetoken.googleapis.com/v1/token"
 FIRESTORE_BASE     = "https://firestore.googleapis.com/v1"
-SHAZAM_TRACK_URL   = "https://www.shazam.com/discovery/v5/en-US/IN/web/-/track/{key}"
+RAPIDAPI_SHAZAM_URL = "https://shazam-core.p.rapidapi.com/v1/tracks/details"
 
 
 def get_fresh_id_token(api_key: str, refresh_token: str) -> str:
@@ -108,30 +108,31 @@ def get_firestore_tags(
     return all_docs
 
 
-BROWSER_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.shazam.com/",
-    "Origin": "https://www.shazam.com",
-}
-
-
-def get_track_details(track_key: str, debug: bool = False) -> dict:
+def get_track_details(track_key: str, rapidapi_key: str = "", debug: bool = False) -> dict:
     """
-    Fetch title, artist, and genre for a single track from Shazam's public API.
-    No authentication needed for this endpoint.
+    Fetch title, artist, and genre via RapidAPI Shazam Core.
+    Works from any IP including GitHub Actions (unlike shazam.com which blocks datacenters).
+    Free tier: 500 requests/month at rapidapi.com/tipsters/api/shazam-core
     """
-    url = SHAZAM_TRACK_URL.format(key=track_key)
+    import os
+    key = rapidapi_key or os.getenv("RAPIDAPI_KEY", "")
+    if not key:
+        if debug:
+            print(f"[Shazam] No RAPIDAPI_KEY set - skipping enrichment for {track_key}")
+        return _unknown_track(track_key)
+
     try:
         resp = requests.get(
-            url,
-            params={"shazamapiversion": "v3", "video": "v3"},
-            headers=BROWSER_HEADERS,
+            RAPIDAPI_SHAZAM_URL,
+            params={"track_id": track_key},
+            headers={
+                "X-RapidAPI-Key":  key,
+                "X-RapidAPI-Host": "shazam-core.p.rapidapi.com",
+            },
             timeout=10,
         )
         if resp.status_code != 200:
-            print(f"[Shazam] Track {track_key} returned {resp.status_code} - enrichment failed")
+            print(f"[Shazam] Track {track_key} returned {resp.status_code}")
             return _unknown_track(track_key)
 
         data = resp.json()
@@ -169,8 +170,10 @@ def _filter_raw_tags_since(raw_tags: list[dict], since_iso: str) -> list[dict]:
     return filtered
 
 
-def _enrich_tags(raw_tags: list[dict], debug: bool = False) -> list[dict]:
+def _enrich_tags(raw_tags: list[dict], rapidapi_key: str = "", debug: bool = False) -> list[dict]:
     """Enrich a pre-filtered list of raw Firestore docs with title/artist/genre."""
+    import os
+    key = rapidapi_key or os.getenv("RAPIDAPI_KEY", "")
     songs = []
     for i, doc in enumerate(raw_tags):
         fields    = doc.get("fields", {})
@@ -184,14 +187,14 @@ def _enrich_tags(raw_tags: list[dict], debug: bool = False) -> list[dict]:
         if debug:
             print(f"[Shazam] Enriching song {i+1}/{len(raw_tags)} (key={track_key})...")
 
-        details = get_track_details(track_key, debug=debug)
+        details = get_track_details(track_key, rapidapi_key=key, debug=debug)
         details["detected_at"] = tag_time
         details["tag_type"]    = tag_type
 
         songs.append(details)
 
         if i < len(raw_tags) - 1:
-            time.sleep(0.2)
+            time.sleep(0.3)
 
     return songs
 
@@ -203,6 +206,7 @@ def get_shazam_library(
     project: str,
     since_iso: str = "",
     limit: int = None,
+    rapidapi_key: str = "",
     debug: bool = False,
 ) -> list[dict]:
     """
@@ -236,11 +240,15 @@ def get_shazam_library(
         if debug:
             print(f"[Shazam] Limited to {limit} for this run.")
 
-    songs = _enrich_tags(raw_tags, debug=debug)
+    songs = _enrich_tags(raw_tags, rapidapi_key=rapidapi_key, debug=debug)
     if debug:
         print(f"[Shazam] Enriched {len(songs)} songs.")
 
-    return songs
+    # Filter out unknown tracks (enrichment failed)
+    known = [s for s in songs if not s["title"].startswith("Unknown track")]
+    if len(known) < len(songs):
+        print(f"[Shazam] {len(songs) - len(known)} tracks could not be enriched and were skipped.")
+    return known
 
 
 def get_recent_shazam_taste(

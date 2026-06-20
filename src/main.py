@@ -80,6 +80,7 @@ def load_config() -> dict:
         sys.exit(1)
 
     config["SCORE_THRESHOLD"] = int(os.getenv("SCORE_THRESHOLD", "5"))
+    config["RAPIDAPI_KEY"]    = os.getenv("RAPIDAPI_KEY", "")
     config["TO_EMAIL"]        = os.getenv("TO_EMAIL", config["GMAIL_ADDRESS"])
 
     return config
@@ -121,25 +122,14 @@ def run(dry_run: bool = False, debug: bool = False, limit: int = None) -> None:
         project=config["FIREBASE_PROJECT"],
         since_iso=last_run,
         limit=limit,
+        rapidapi_key=config["RAPIDAPI_KEY"],
         debug=debug,
     )
     print(f"      {len(new_songs)} new song(s) to process{f' (limit={limit})' if limit else ''}")
 
-    print("      Fetching recent Auto-Shazam taste signal (last year)...")
-    try:
-        recent_shazam_songs = get_recent_shazam_taste(
-            api_key=config["FIREBASE_API_KEY"],
-            refresh_token=config["FIREBASE_REFRESH_TOKEN"],
-            user_id=config["FIREBASE_USER_ID"],
-            project=config["FIREBASE_PROJECT"],
-            days=365,
-            limit=50,
-            debug=debug,
-        )
-        print(f"      Recent taste: {len(recent_shazam_songs)} Auto-Shazam songs")
-    except Exception as e:
-        print(f"      WARNING: Could not fetch recent taste: {e} (non-fatal)")
-        recent_shazam_songs = []
+    # Auto-Shazam taste signal disabled - playlist (1500+ songs) already provides
+    # comprehensive taste context, and enrichment uses RapidAPI quota.
+    recent_shazam_songs = []
 
     if not new_songs:
         print("\n      Nothing new to process. Done.")

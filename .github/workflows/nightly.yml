@@ -71,6 +71,7 @@ jobs:
           YTMUSIC_HEADERS: ${{ secrets.YTMUSIC_HEADERS }}
           PLAYLIST_IDS: ${{ secrets.PLAYLIST_IDS }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
