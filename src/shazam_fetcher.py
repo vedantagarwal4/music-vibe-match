@@ -117,7 +117,7 @@ def get_track_details(track_key: str, debug: bool = False) -> dict:
 
     async def _fetch():
         shazam = Shazam()
-        return await shazam.track_about(track_id=track_key)
+        return await asyncio.wait_for(shazam.track_about(track_id=track_key), timeout=8.0)
 
     try:
         data = asyncio.run(_fetch())
